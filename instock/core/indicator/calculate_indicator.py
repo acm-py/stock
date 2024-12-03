@@ -10,7 +10,80 @@ __author__ = 'myh '
 __date__ = '2023/3/10 '
 
 
-def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
+def get_indicators(data: pd.DataFrame, end_date: str = None, threshold: int = 120, calc_threshold: int = None) -> pd.DataFrame:
+    """计算股票的技术指标
+
+    该函数计算一系列技术分析指标，包括 MACD、KDJ、BOLL、TRIX、CR、RSI、VR、ATR、DMI、WR、CCI 等。
+    所有计算都使用 talib 库进行高效的向量化运算。
+
+    Args:
+        data (pd.DataFrame): 股票数据，必须包含以下列：
+            - date: 日期
+            - open: 开盘价
+            - high: 最高价
+            - low: 最低价
+            - close: 收盘价
+            - volume: 成交量
+            - amount: 成交额
+        end_date (str, optional): 结束日期，格式为 'YYYY-MM-DD'。默认为 None，表示使用所有数据。
+        threshold (int, optional): 计算指标需要的最小数据量。默认为 120。
+        calc_threshold (int, optional): 实际计算使用的数据量。默认为 None，表示使用所有数据。
+
+    Returns:
+        pd.DataFrame: 包含原始数据和计算出的技术指标的 DataFrame。新增的指标包括：
+            - MACD 相关: macd, macds (MACD Signal), macdh (MACD Histogram)
+            - KDJ 相关: kdjk, kdjd, kdjj
+            - BOLL 相关: boll_ub (上轨), boll (中轨), boll_lb (下轨)
+            - TRIX 相关: trix, trix_20_sma
+            - CR 相关: cr, cr-ma1, cr-ma2, cr-ma3
+            - RSI 相关: rsi, rsi_6, rsi_12, rsi_24
+            - VR 相关: vr, vr_6_sma
+            - 其他指标: atr, pdi, mdi, dx, adx, adxr, wr_6, wr_10, wr_14, cci, cci_84
+
+    Raises:
+        Exception: 当计算过程中发生错误时抛出异常
+
+    技术指标说明：
+        1. MACD (Moving Average Convergence Divergence):
+           - 用于判断多空趋势和买卖信号
+           - 参数：快线=12，慢线=26，信号线=9
+
+        2. KDJ:
+           - 随机指标，用于判断超买超卖
+           - 参数：K值=9，D值=3
+
+        3. BOLL (Bollinger Bands):
+           - 布林带，用于判断价格波动区间
+           - 参数：中线=20日均线，上下轨=标准差*2
+
+        4. TRIX:
+           - 三重指数平滑移动平均指标
+           - 用于判断中长期趋势
+
+        5. CR (Capacity Ratio):
+           - 能量指标，衡量市场人气
+           - 参数：26日
+
+        6. RSI (Relative Strength Index):
+           - 相对强弱指标
+           - 参数：6日、12日、24日
+
+    Examples:
+        >>> import pandas as pd
+        >>> # 准备股票数据
+        >>> data = pd.DataFrame({
+        ...     'date': ['2023-01-01', '2023-01-02'],
+        ...     'open': [10, 11],
+        ...     'high': [12, 13],
+        ...     'low': [9, 10],
+        ...     'close': [11, 12],
+        ...     'volume': [1000, 1100],
+        ...     'amount': [11000, 12100]
+        ... })
+        >>> # 计算指标
+        >>> indicators = get_indicators(data)
+        >>> print(indicators['macd'])  # 查看 MACD 值
+    """
     try:
         isCopy = False
         if end_date is not None:
@@ -411,7 +484,61 @@ def get_indicators(data, end_date=None, threshold=120, calc_threshold=None):
     return None
 
 
-def get_indicator(code_name, data, stock_column, date=None, calc_threshold=90):
+def get_indicator(
+    code_name: tuple[str, str],  # (date, code)
+    data: pd.DataFrame,
+    stock_column: list[str],
+    date: datetime.datetime = None,
+    calc_threshold: int = 90
+) -> pd.Series | None:
+    """获取指定股票的特定技术指标数据
+
+    该函数是 get_indicators 的包装函数，用于获取特定股票在指定日期的技术指标数据。
+    它会处理各种边界情况，如数据为空、计算结果为无穷大或 NaN 等。
+
+    Args:
+        code_name (tuple[str, str]): 股票信息元组，格式为 (date, code)
+            - date: 日期字符串，格式为 'YYYY-MM-DD'
+            - code: 股票代码
+        data (pd.DataFrame): 股票历史数据，必须包含计算技术指标所需的基本数据列：
+            - open: 开盘价
+            - high: 最高价
+            - low: 最低价
+            - close: 收盘价
+            - volume: 成交量
+            - amount: 成交额
+        stock_column (list[str]): 需要获取的列名列表，第一个元素必须是日期，第二个是股票代码
+            例如: ['date', 'code', 'macd', 'kdjk', 'boll']
+        date (datetime.datetime, optional): 指定日期。如果为 None，则使用 code_name[0]。
+            默认为 None。
+        calc_threshold (int, optional): 计算指标使用的数据量阈值。
+            默认为 90，表示使用最近90天的数据计算指标。
+
+    Returns:
+        pd.Series | None: 包含指定指标数据的 Series，索引为 stock_column。
+            - 如果计算成功，返回包含指标值的 Series
+            - 如果数据为空或发生错误，返回 None
+            - 对于无效数据，相应的指标值会被设为 0
+
+    Raises:
+        Exception: 在处理过程中发生的任何异常都会被捕获并记录到日志，函数返回 None
+
+    Examples:
+        >>> # 获取某只股票的 MACD 和 KDJ 指标
+        >>> code_name = ('2023-01-01', '000001')
+        >>> columns = ['date', 'code', 'macd', 'kdjk', 'kdjd']
+        >>> indicator_data = get_indicator(code_name, stock_data, columns)
+        >>> if indicator_data is not None:
+        ...     print(f"MACD: {indicator_data['macd']}")
+        ...     print(f"KDJ-K: {indicator_data['kdjk']}")
+
+    Notes:
+        1. 函数会自动处理无效数据：
+           - 如果输入数据少于2行，返回全0数据
+           - 如果计算结果包含 INF 或 NaN，相应位置填充为0
+        2. 使用 logging 模块记录错误信息
+        3. 该函数通常用于获取单个股票的指标数据，而不是批量处理
+    """
     try:
         if date is None:
             end_date = code_name[0]

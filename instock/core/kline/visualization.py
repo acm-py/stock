@@ -20,8 +20,79 @@ import instock.core.kline.indicator_web_dic as iwd
 __author__ = 'myh '
 __date__ = '2023/4/6 '
 
+def get_plot_kline(
+    code: str,
+    stock: pd.DataFrame,
+    date: datetime.datetime,
+    stock_name: str
+) -> list[dict[str, str]] | None:
+    """生成股票K线图的交互式可视化图表
 
-def get_plot_kline(code, stock, date, stock_name):
+    该函数生成一个完整的股票技术分析图表，包括K线、均线、技术指标和形态标注。
+    使用Bokeh库实现交互式可视化，支持多种图表操作工具。
+
+    Args:
+        code (str): 股票代码
+        stock (pd.DataFrame): 股票历史数据，必须包含以下列：
+            - open: 开盘价
+            - high: 最高价
+            - low: 最低价
+            - close: 收盘价
+            - volume: 成交量
+            - amount: 成交额
+        date (datetime.datetime): 数据日期
+        stock_name (str): 股票名称
+
+    Returns:
+        list[dict[str, str]] | None: 包含图表组件的列表，每个组件是一个字典：
+            - 成功时返回 [{"div": html_div, "script": js_script}, ...]
+            - 失败时返回 None
+            每个图表组件包含：
+            - div: HTML div元素，包含图表的视觉展示
+            - script: JavaScript代码，处理图表的交互功能
+
+    Technical Details:
+        1. 数据处理:
+           - 使用360天的历史数据计算技术指标
+           - 进行K线形态识别
+           - 生成图表索引用于X轴显示
+
+        2. 图表元素:
+           - K线图（红涨绿跌）
+           - 均线（MA10、MA20、MA50、MA200）
+           - 成交量柱状图
+           - 技术指标子图表
+           - K线形态标注
+
+        3. 交互工具:
+           - 平移
+           - 缩放（框选、滚轮、按钮）
+           - 十字光标
+           - 数据提示框
+           - 图表保存
+
+        4. 布局设计:
+           - 主图：K线+均线
+           - 副图：成交量
+           - 联动：十字光标联动、缩放联动
+
+    Examples:
+        >>> # 生成某只股票的K线图
+        >>> stock_data = pd.DataFrame({
+        ...     'open': [10, 11], 'high': [12, 13],
+        ...     'low': [9, 10], 'close': [11, 12],
+        ...     'volume': [1000, 1100], 'amount': [11000, 12100]
+        ... })
+        >>> plots = get_plot_kline('000001', stock_data, 
+        ...                       datetime.datetime.now(), '平安银行')
+        >>> if plots:
+        ...     print("成功生成图表")
+
+    Notes:
+        1. 确保输入的DataFrame包含所有必需的列
+        2. 图表生成失败时会返回None并记录错误日志
+        3. 图表样式和布局已经过优化，适合大多数显示设备
+    """
     plot_list = []
     threshold = 360
     try:
