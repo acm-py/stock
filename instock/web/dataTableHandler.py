@@ -1,69 +1,92 @@
-#!/usr/local/bin/python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-
 import json
-from abc import ABC
-from tornado import gen
-# import logging
 import datetime
+import logging
+import pandas as pd
+from tornado import gen
+import tornado.web
 import instock.lib.trade_time as trd
 import instock.core.singleton_stock_web_module_data as sswmd
-import instock.web.base as webBase
-
-__author__ = 'myh '
-__date__ = '2023/3/10 '
-
+from instock.web.web_service import BaseHandler
 
 class MyEncoder(json.JSONEncoder):
-
     def default(self, obj):
-        if isinstance(obj, bytes):
-            return "是" if ord(obj) == 1 else "否"
-        elif isinstance(obj, datetime.date):
-            delta = datetime.datetime.combine(obj, datetime.time.min) - datetime.datetime(1899, 12, 30)
-            return f'/OADate({float(delta.days) + (float(delta.seconds) / 86400)})/'  # 86,400 seconds in day
-            # return obj.isoformat()
-        else:
-            return json.JSONEncoder.default(self, obj)
+        if isinstance(obj, pd.Timestamp):
+            return obj.strftime('%Y-%m-%d')
+        return json.JSONEncoder.default(self, obj)
 
-
-# 获得页面数据。
-class GetStockHtmlHandler(webBase.BaseHandler, ABC):
+class GetStockHtmlHandler(BaseHandler):
     @gen.coroutine
     def get(self):
         name = self.get_argument("table_name", default=None, strip=False)
+        logging.info(f"请求的表名: {name}")
+        
         web_module_data = sswmd.stock_web_module_data().get_data(name)
+        if web_module_data is None:
+            logging.error(f"未找到表名为 {name} 的模块数据")
+            logging.info(f"可用的表名: {[item.table_name for item in sswmd.stock_web_module_data().data_list]}")
+            self.write_error(404)
+            return
+            
         run_date, run_date_nph = trd.get_trade_date_last()
-        if web_module_data.is_realtime:
-            date_now_str = run_date_nph.strftime("%Y-%m-%d")
-        else:
-            date_now_str = run_date.strftime("%Y-%m-%d")
-        self.render("stock_web.html", web_module_data=web_module_data, date_now=date_now_str,
-                    leftMenu=webBase.GetLeftMenu(self.request.uri))
+        date_now_str = run_date_nph.strftime("%Y-%m-%d") if web_module_data.is_realtime else run_date.strftime("%Y-%m-%d")
+        
+        self.render("stock_web.html", 
+                   web_module_data=web_module_data, 
+                   date_now=date_now_str,
+                   leftMenu=self.get_left_menu(self.request.uri))
 
-
-# 获得股票数据内容。
-class GetStockDataHandler(webBase.BaseHandler, ABC):
+class GetStockDataHandler(BaseHandler):
     def get(self):
-        name = self.get_argument("name", default=None, strip=False)
-        date = self.get_argument("date", default=None, strip=False)
-        web_module_data = sswmd.stock_web_module_data().get_data(name)
-        self.set_header('Content-Type', 'application/json;charset=UTF-8')
-        if date is None:
-            where = ""
-        else:
-            where = f" WHERE `date` = '{date}'"
+        try:
+            name = self.get_argument("name", default=None, strip=False)
+            if not name:
+                self.write_json({"error": "name parameter is required"})
+                return
 
-        order_by = ""
-        if web_module_data.order_by is not None:
-            order_by = f" ORDER BY {web_module_data.order_by}"
+            date_str = self.get_argument("date", default=None, strip=False)
+            if date_str:
+                date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+            else:
+                date = datetime.date.today()
 
-        order_columns = ""
-        if web_module_data.order_columns is not None:
-            order_columns = f",{web_module_data.order_columns}"
+            web_module_data = sswmd.stock_web_module_data().get_data(name)
+            if web_module_data is None:
+                self.write_json({"error": f"No data found for name: {name}"})
+                return
 
-        sql = f" SELECT *{order_columns} FROM `{web_module_data.table_name}`{where}{order_by}"
+            conn = self.db
+            if not conn:
+                self.write_json({"error": "Failed to connect to database"})
+                return
 
-        data = self.db.query(sql)
-        self.write(json.dumps(data, cls=MyEncoder))
+            try:
+                sql = f'SELECT * FROM "{web_module_data.table_name}"'
+                result = conn.execute(sql).fetchdf()
+                if not result.empty:
+                    self.write_json({
+                        "draw": 1,
+                        "recordsTotal": len(result),
+                        "recordsFiltered": len(result),
+                        "data": result.to_dict(orient='records')
+                    })
+                else:
+                    self.write_json({
+                        "draw": 1,
+                        "recordsTotal": 0,
+                        "recordsFiltered": 0,
+                        "data": []
+                    })
+            finally:
+                conn.close()
+        except Exception as e:
+            logging.error(f"GetStockDataHandler处理异常：{e}")
+            self.write_json({
+                "draw": 1,
+                "recordsTotal": 0,
+                "recordsFiltered": 0,
+                "data": [],
+                "error": str(e)
+            })
