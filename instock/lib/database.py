@@ -22,10 +22,15 @@ if _db_file is not None:
 logging.info(f"数据库文件路径：{db_file}")
 
 
-
 def create_tables(conn):
     """创建必要的表"""
     try:
+        # 先删除旧表
+        # conn.execute("DROP TABLE IF EXISTS cn_stock_selection")
+        # conn.execute("DROP TABLE IF EXISTS cn_stock_spot")
+        # conn.execute("DROP TABLE IF EXISTS cn_stock_fund_flow")
+        # conn.execute("DROP TABLE IF EXISTS cn_stock_attention")
+        
         # 创建 cn_stock_selection 表
         conn.execute("""
             CREATE TABLE IF NOT EXISTS cn_stock_selection (
@@ -41,7 +46,15 @@ def create_tables(conn):
                 pe_ttm DOUBLE,
                 basic_eps DOUBLE,
                 predict_netprofit_ratio DOUBLE,
-                predict_income_ratio DOUBLE
+                predict_income_ratio DOUBLE,
+                dtsyl DOUBLE,                      -- 动态市盈率
+                ycpeg DOUBLE,                      -- 预测PEG
+                enterprise_value_multiple DOUBLE,   -- 企业价值倍数
+                turnoverrate DOUBLE,               -- 换手率
+                macd_golden_fork BOOLEAN,          -- MACD金叉日线
+                kdj_golden_fork BOOLEAN,           -- KDJ金叉日线
+                rsi_golden_fork BOOLEAN,           -- RSI金叉
+                PRIMARY KEY (date, code)
             )
         """)
         
@@ -56,7 +69,13 @@ def create_tables(conn):
                 volume BIGINT,
                 deal_amount BIGINT,
                 total_market_cap BIGINT,
-                industry_name VARCHAR(20)
+                industry_name VARCHAR(20),
+                turnoverrate DOUBLE,               -- 换手率
+                pe_ttm DOUBLE,                     -- 市盈率TTM
+                pb_ttm DOUBLE,                     -- 市净率TTM
+                ps_ttm DOUBLE,                     -- 市销率TTM
+                pcf_ttm DOUBLE,                    -- 市现率TTM
+                PRIMARY KEY (date, code)
             )
         """)
         
@@ -68,8 +87,13 @@ def create_tables(conn):
                 name VARCHAR(20),
                 new_price DOUBLE,
                 change_rate DOUBLE,
-                fund_amount BIGINT,
-                fund_rate DOUBLE
+                fund_amount BIGINT,                -- 主力净流入-净额
+                fund_rate DOUBLE,                  -- 主力净流入-净占比
+                fund_amount_5 BIGINT,              -- 5日主力净流入-净额
+                fund_rate_5 DOUBLE,                -- 5日主力净流入-净占比
+                fund_amount_10 BIGINT,             -- 10日主力净流入-净额
+                fund_rate_10 DOUBLE,               -- 10日主力净流入-净占比
+                PRIMARY KEY (date, code)
             )
         """)
         
@@ -77,25 +101,64 @@ def create_tables(conn):
         conn.execute("""
             CREATE TABLE IF NOT EXISTS cn_stock_attention (
                 datetime TIMESTAMP,
-                code VARCHAR(6)
+                code VARCHAR(6),
+                create_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- 创建时间
+                PRIMARY KEY (datetime, code)
             )
         """)
         
         # 插入一些测试数据到 cn_stock_selection
-        conn.execute("""
-            INSERT INTO cn_stock_selection 
-            VALUES 
-            ('2024-12-03', '000001', '平安银行', 10.5, 2.5, 1000000, 10500000, 2000000000, '银行', 8.5, 1.2, 15.5, 10.2),
-            ('2024-12-03', '000002', '万科A', 15.8, -1.2, 800000, 12640000, 1800000000, '房地产', 7.2, 0.9, 8.5, 5.8),
-            ('2024-12-03', '000003', '国光电器', 25.3, 3.8, 500000, 12650000, 500000000, '电子', 12.5, 0.8, 20.5, 15.3)
-            ON CONFLICT DO NOTHING
-        """)
+        try:
+            conn.execute("""
+                INSERT INTO cn_stock_selection 
+                (date, code, name, new_price, change_rate, volume, deal_amount, total_market_cap, 
+                industry_name, pe_ttm, basic_eps, predict_netprofit_ratio, predict_income_ratio,
+                dtsyl, ycpeg, enterprise_value_multiple, turnoverrate, 
+                macd_golden_fork, kdj_golden_fork, rsi_golden_fork)
+                VALUES 
+                ('2024-12-03', '000001', '平安银行', 10.5, 2.5, 1000000, 10500000, 2000000000, 
+                '银行', 8.5, 1.2, 15.5, 10.2, 8.8, 0.9, 9.5, 2.5, true, false, true),
+                
+                ('2024-12-03', '000002', '万科A', 15.8, -1.2, 800000, 12640000, 1800000000, 
+                '房地产', 7.2, 0.9, 8.5, 5.8, 7.5, 1.2, 8.2, 1.8, false, true, false),
+                
+                ('2024-12-03', '000003', '国光电器', 25.3, 3.8, 500000, 12650000, 500000000, 
+                '电子', 12.5, 0.8, 20.5, 15.3, 12.8, 1.5, 13.2, 3.2, true, true, true)
+            """)
+            
+            # 插入一些测试数据到 cn_stock_spot
+            conn.execute("""
+                INSERT INTO cn_stock_spot
+                (date, code, name, new_price, change_rate, volume, deal_amount, total_market_cap,
+                industry_name, turnoverrate, pe_ttm, pb_ttm, ps_ttm, pcf_ttm)
+                VALUES
+                ('2024-12-03', '000001', '平安银行', 10.5, 2.5, 1000000, 10500000, 2000000000,
+                '银行', 2.5, 8.5, 1.2, 2.1, 5.8),
+                
+                ('2024-12-03', '000002', '万科A', 15.8, -1.2, 800000, 12640000, 1800000000,
+                '房地产', 1.8, 7.2, 0.9, 1.5, 4.2)
+            """)
+            
+            # 插入一些测试数据到 cn_stock_fund_flow
+            conn.execute("""
+                INSERT INTO cn_stock_fund_flow
+                (date, code, name, new_price, change_rate, fund_amount, fund_rate,
+                fund_amount_5, fund_rate_5, fund_amount_10, fund_rate_10)
+                VALUES
+                ('2024-12-03', '000001', '平安银行', 10.5, 2.5, 50000000, 5.2,
+                200000000, 8.5, 450000000, 12.3),
+                
+                ('2024-12-03', '000002', '万科A', 15.8, -1.2, -30000000, -3.8,
+                -150000000, -6.2, -280000000, -9.5)
+            """)
+        except Exception as e:
+            # 如果插入失败（可能是数据已存在），忽略错误
+            logging.warning(f"插入测试数据时出错（可能是数据已存在）：{e}")
         
-        logging.info("成功创建所有必要的表并插入测试数据")
+        logging.info("成功创建所有必要的表")
     except Exception as e:
         logging.error(f"创建表时出错：{e}")
         raise
-
 
 def _convert_sqlalchemy_type(sa_type):
     """转换SQLAlchemy类型到DuckDB类型"""
