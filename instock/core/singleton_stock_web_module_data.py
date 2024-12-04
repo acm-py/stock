@@ -18,8 +18,8 @@ class stock_web_module_data(metaclass=singleton_type):
                 column_names=tbs.get_field_cns(tbs.TABLE_CN_STOCK_SELECTION['columns']),
                 primary_key=[],
                 is_realtime=False,
-                order_columns=f'(SELECT create_date FROM "{tbs.TABLE_CN_STOCK_ATTENTION["name"]}" WHERE code="{tbs.TABLE_CN_STOCK_SELECTION["name"]}".code) AS cdatetime',
-                order_by=' ORDER BY cdatetime DESC NULLS LAST'
+                order_columns=None,
+                order_by='date DESC'
             ),
             wmd.web_module_data(
                 mode="query",
@@ -31,8 +31,8 @@ class stock_web_module_data(metaclass=singleton_type):
                 column_names=tbs.get_field_cns(tbs.TABLE_CN_STOCK_SPOT['columns']),
                 primary_key=[],
                 is_realtime=True,
-                order_columns=f'(SELECT create_date FROM "{tbs.TABLE_CN_STOCK_ATTENTION["name"]}" WHERE code="{tbs.TABLE_CN_STOCK_SPOT["name"]}".code) AS cdatetime',
-                order_by=' ORDER BY cdatetime DESC NULLS LAST'
+                order_columns=None,
+                order_by='date DESC'
             ),
             wmd.web_module_data(
                 mode="query",
@@ -44,12 +44,14 @@ class stock_web_module_data(metaclass=singleton_type):
                 column_names=tbs.get_field_cns(tbs.TABLE_CN_STOCK_FUND_FLOW['columns']),
                 primary_key=[],
                 is_realtime=True,
-                order_columns=f'(SELECT create_date FROM "{tbs.TABLE_CN_STOCK_ATTENTION["name"]}" WHERE code="{tbs.TABLE_CN_STOCK_FUND_FLOW["name"]}".code) AS cdatetime',
-                order_by=' ORDER BY cdatetime DESC NULLS LAST'
+                order_columns=None,
+                order_by='date DESC'
             )
         ]
+        # 初始化_data字典，用于快速查找表数据
         self._data = {item.table_name: item for item in self.data_list}
 
+        
     def get_data(self, table_name):
         if table_name in self._data:
             return self._data[table_name]

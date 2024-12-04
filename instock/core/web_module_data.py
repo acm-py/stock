@@ -18,23 +18,17 @@ class web_module_data:
 
     def get_sql(self, date=None):
         """生成DuckDB兼容的SQL查询"""
-        # 构建SELECT部分
-        select_parts = ["*"]
-        if self.order_columns:
-            # 将MySQL风格的子查询改为DuckDB风格
-            attention_subquery = self.order_columns.replace('`', '"')
-            select_parts.append(attention_subquery)
+        # 构建基本查询
+        sql = f'SELECT * FROM "{self.table_name}"'
 
-        # 构建WHERE部分
-        where_clause = ""
+        # 添加日期过滤
         if date:
-            where_clause = f' WHERE "date" = \'{date}\''
+            sql += f' WHERE date = \'{date}\''
 
-        # 构建ORDER BY部分
-        order_clause = ""
+        # 添加排序
         if self.order_by:
-            order_clause = self.order_by.replace('`', '"')
+            # 移除原始的ORDER BY，因为我们会在后面添加
+            clean_order = self.order_by.replace('ORDER BY', '').strip()
+            sql += f' ORDER BY {clean_order}'
 
-        # 组合SQL
-        sql = f'SELECT {", ".join(select_parts)} FROM "{self.table_name}"{where_clause}{order_clause}'
         return sql

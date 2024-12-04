@@ -26,10 +26,10 @@ def create_tables(conn):
     """创建必要的表"""
     try:
         # 先删除旧表
-        # conn.execute("DROP TABLE IF EXISTS cn_stock_selection")
-        # conn.execute("DROP TABLE IF EXISTS cn_stock_spot")
-        # conn.execute("DROP TABLE IF EXISTS cn_stock_fund_flow")
-        # conn.execute("DROP TABLE IF EXISTS cn_stock_attention")
+        conn.execute("DROP TABLE IF EXISTS cn_stock_selection")
+        conn.execute("DROP TABLE IF EXISTS cn_stock_spot")
+        conn.execute("DROP TABLE IF EXISTS cn_stock_fund_flow")
+        conn.execute("DROP TABLE IF EXISTS cn_stock_attention")
         
         # 创建 cn_stock_selection 表
         conn.execute("""
@@ -98,12 +98,13 @@ def create_tables(conn):
         """)
         
         # 创建 cn_stock_attention 表
+        # 创建 cn_stock_attention 表
         conn.execute("""
             CREATE TABLE IF NOT EXISTS cn_stock_attention (
-                datetime TIMESTAMP,
-                code VARCHAR(6),
+                code VARCHAR(6),                               -- 股票代码
+                name VARCHAR(20),                             -- 股票名称
                 create_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- 创建时间
-                PRIMARY KEY (datetime, code)
+                PRIMARY KEY (code)                            -- 每个股票代码只能关注一次
             )
         """)
         

@@ -150,7 +150,7 @@
         const productTable = dataManager.addTable("productTable", {
             remote: {
                 read: {
-                    url: "/instock/api_data?name="+nameParam+"&date="+dateParam
+                    url: "/instock/api_data?table_name="+nameParam+"&date="+dateParam
                 }
             },
             schema: {
@@ -181,7 +181,7 @@
         });
         spread.resumePaint();
     }
-
+    
     function initEvent(spread,statusBar) {
         document.getElementById('saveExcel').onclick = function() {
             const excelIo = new GC.Spread.Excel.IO();

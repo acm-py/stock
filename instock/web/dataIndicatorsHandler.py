@@ -42,6 +42,7 @@ class SaveCollectHandler(BaseHandler):
     @gen.coroutine
     def get(self):
         code = self.get_argument("code", default=None, strip=False)
+        name = self.get_argument("name", default=None, strip=False)
         otype = self.get_argument("otype", default=None, strip=False)
         
         try:
@@ -50,13 +51,13 @@ class SaveCollectHandler(BaseHandler):
             
             if otype == "1":  # 添加关注
                 sql = f"""
-                INSERT INTO {tbs.TABLE_NAME_STOCK_ATTENTION} (code, create_date) 
-                VALUES (?, ?)
+                INSERT INTO {tbs.TABLE_CN_STOCK_ATTENTION['name']} (code, name, create_date) 
+                VALUES (?, ?, ?)
                 """
-                conn.execute(sql, [code, now])
+                conn.execute(sql, [code, name, now])
             else:  # 删除关注
                 sql = f"""
-                DELETE FROM {tbs.TABLE_NAME_STOCK_ATTENTION} 
+                DELETE FROM {tbs.TABLE_CN_STOCK_ATTENTION['name']} 
                 WHERE code = ?
                 """
                 conn.execute(sql, [code])
@@ -65,6 +66,3 @@ class SaveCollectHandler(BaseHandler):
         except Exception as e:
             logging.error(f"SaveCollectHandler处理异常：{e}")
             self.write("false")
-        finally:
-            if conn:
-                conn.close()
